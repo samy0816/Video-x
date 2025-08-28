@@ -11,6 +11,7 @@ import MicOffIcon from '@mui/icons-material/MicOff'
 import ScreenShareIcon from '@mui/icons-material/ScreenShare';
 import StopScreenShareIcon from '@mui/icons-material/StopScreenShare'
 import ChatIcon from '@mui/icons-material/Chat'
+import SmartToyIcon from '@mui/icons-material/SmartToy'
 import server from '../environment';
 
 const server_url = server;
@@ -24,6 +25,25 @@ const peerConfigConnections = {
 }
 
 export default function VideoMeetComponent() {
+    // Video background with dark gradient overlay
+    const videoBackgroundStyle = {
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        width: '100vw',
+        height: '100vh',
+        zIndex: -3,
+        objectFit: 'cover',
+    };
+    const gradientOverlayStyle = {
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        width: '100vw',
+        height: '100vh',
+        zIndex: -2,
+        background: 'linear-gradient(120deg, rgba(30,34,90,0.7) 0%, rgba(20,20,20,0.7) 100%)',
+    };
 
     var socketRef = useRef();
     let socketIdRef = useRef();
@@ -57,6 +77,43 @@ export default function VideoMeetComponent() {
     const videoRef = useRef([])
 
     let [videos, setVideos] = useState([])
+
+    // --- Smart Assistant State ---
+    const [transcript, setTranscript] = useState("");
+    const [aiQuestion, setAiQuestion] = useState("");
+    const [aiAnswer, setAiAnswer] = useState("");
+    const [aiLoading, setAiLoading] = useState(false);
+    const [showAISidebar, setShowAISidebar] = useState(false);
+
+    // --- Transcript: (Demo) Append chat messages to transcript ---
+    useEffect(() => {
+        if (messages.length > 0) {
+            setTranscript(prev => prev + " " + messages[messages.length - 1].data);
+        }
+    }, [messages]);
+
+    // --- Smart Assistant Handler ---
+    async function handleAskAI() {
+        setAiLoading(true);
+        setAiAnswer("");
+        try {
+            const res = await fetch("http://localhost:8000/api/ai/ask", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ transcript, question: aiQuestion })
+            });
+            const data = await res.json();
+            setAiAnswer(
+                (data.summary ? `Summary: ${data.summary}\n\n` : "") +
+                (data.recommendations && data.recommendations.length
+                    ? "Possible Questions:\n" + data.recommendations.map((r, i) => `• ${r}`).join("\n")
+                    : "")
+            );
+        } catch (err) {
+            setAiAnswer("Error: " + err.message);
+        }
+        setAiLoading(false);
+    }
 
     // TODO
     // if(isChrome() === false) {
@@ -383,12 +440,26 @@ export default function VideoMeetComponent() {
     }
 
     let handleVideo = () => {
-        setVideo(!video);
-        // getUserMedia();
+        const newVideoState = !video;
+        setVideo(newVideoState);
+        // Enable/disable video tracks
+        if (localVideoref.current && localVideoref.current.srcObject) {
+            const videoTracks = localVideoref.current.srcObject.getVideoTracks();
+            videoTracks.forEach(track => {
+                track.enabled = newVideoState;
+            });
+        }
     }
     let handleAudio = () => {
-        setAudio(!audio)
-        // getUserMedia();
+        const newAudioState = !audio;
+        setAudio(newAudioState);
+        // Enable/disable audio tracks
+        if (localVideoref.current && localVideoref.current.srcObject) {
+            const audioTracks = localVideoref.current.srcObject.getAudioTracks();
+            audioTracks.forEach(track => {
+                track.enabled = newAudioState;
+            });
+        }
     }
 
     useEffect(() => {
@@ -447,108 +518,455 @@ export default function VideoMeetComponent() {
 
 
     return (
-        <div>
-
-            {askForUsername === true ?
-
-                <div>
-
-
-                    <h2>Enter into Lobby </h2>
-                    <TextField id="outlined-basic" label="Username" value={username} onChange={e => setUsername(e.target.value)} variant="outlined" />
-                    <Button variant="contained" onClick={connect}>Connect</Button>
-
-
-                    <div>
-                        <video ref={localVideoref} autoPlay muted></video>
+        <div style={{ minHeight: '100vh', position: 'relative' }}>
+            {/* Video background */}
+            <video
+                autoPlay
+                loop
+                muted
+                playsInline
+                style={videoBackgroundStyle}
+                src="/video1.mp4"
+            />
+            {/* Dark gradient overlay */}
+            <div style={gradientOverlayStyle} />
+            {/* Smart Assistant Sidebar */}
+            <div style={{
+                position: 'fixed',
+                right: showAISidebar ? 0 : -380,
+                top: 0,
+                height: '100vh',
+                width: 380,
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                boxShadow: '-4px 0 20px rgba(102,126,234,0.25)',
+                zIndex: 10,
+                display: 'flex',
+                flexDirection: 'column',
+                overflow: 'hidden',
+                transition: 'right 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
+                borderRadius: showAISidebar ? '0' : '20px 0 0 20px'
+            }}>
+                {/* Header */}
+                <div style={{
+                    padding: '20px 24px',
+                    background: 'rgba(255,255,255,0.1)',
+                    backdropFilter: 'blur(10px)',
+                    borderBottom: '1px solid rgba(255,255,255,0.2)'
+                }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <h3 style={{ color: '#fff', fontWeight: 700, margin: 0, fontSize: 20 }}>Smart Assistant</h3>
+                        <Button variant="text" onClick={() => setShowAISidebar(false)} sx={{ color: '#fff', minWidth: 40 }}>
+                            ✕
+                        </Button>
                     </div>
-
-                </div> :
-
-
-                <div className={styles.meetVideoContainer}>
-
-                    {showModal ? <div className={styles.chatRoom}>
-
-                        <div className={styles.chatContainer}>
-                            <h1>Chat</h1>
-
-                            <div className={styles.chattingDisplay}>
-
-                                {messages.length !== 0 ? messages.map((item, index) => {
-
-                                    console.log(messages)
-                                    return (
-                                        <div style={{ marginBottom: "20px" }} key={index}>
-                                            <p style={{ fontWeight: "bold" }}>{item.sender}</p>
-                                            <p>{item.data}</p>
-                                        </div>
-                                    )
-                                }) : <p>No Messages Yet</p>}
-
-
-                            </div>
-
-                            <div className={styles.chattingArea}>
-                                <TextField value={message} onChange={(e) => setMessage(e.target.value)} id="outlined-basic" label="Enter Your chat" variant="outlined" />
-                                <Button variant='contained' onClick={sendMessage}>Send</Button>
-                            </div>
-
-
-                        </div>
-                    </div> : <></>}
-
-
-                    <div className={styles.buttonContainers}>
-                        <IconButton onClick={handleVideo} style={{ color: "white" }}>
-                            {(video === true) ? <VideocamIcon /> : <VideocamOffIcon />}
-                        </IconButton>
-                        <IconButton onClick={handleEndCall} style={{ color: "red" }}>
-                            <CallEndIcon  />
-                        </IconButton>
-                        <IconButton onClick={handleAudio} style={{ color: "white" }}>
-                            {audio === true ? <MicIcon /> : <MicOffIcon />}
-                        </IconButton>
-
-                        {screenAvailable === true ?
-                            <IconButton onClick={handleScreen} style={{ color: "white" }}>
-                                {screen === true ? <ScreenShareIcon /> : <StopScreenShareIcon />}
-                            </IconButton> : <></>}
-
-                        <Badge badgeContent={newMessages} max={999} color='orange'>
-                            <IconButton onClick={() => setModal(!showModal)} style={{ color: "white" }}>
-                                <ChatIcon />                        </IconButton>
-                        </Badge>
-
-                    </div>
-
-
-                    <video className={styles.meetUserVideo} ref={localVideoref} autoPlay muted></video>
-
-                    <div className={styles.conferenceView}>
-                        {videos.map((video) => (
-                            <div key={video.socketId}>
-                                <video
-
-                                    data-socket={video.socketId}
-                                    ref={ref => {
-                                        if (ref && video.stream) {
-                                            ref.srcObject = video.stream;
-                                        }
-                                    }}
-                                    autoPlay
-                                >
-                                </video>
-                            </div>
-
-                        ))}
-
-                    </div>
-
+                    <p style={{ color: 'rgba(255,255,255,0.8)', margin: '8px 0 0', fontSize: 14 }}>Ask questions about the meeting</p>
                 </div>
 
-            }
+                {/* Chat Area */}
+                <div style={{
+                    flex: 1,
+                    padding: '20px 24px',
+                    overflowY: 'auto',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 16
+                }}>
+                    {/* Answer Display */}
+                    {aiAnswer && (
+                        <div style={{
+                            background: 'rgba(255,255,255,0.95)',
+                            borderRadius: 16,
+                            padding: 16,
+                            boxShadow: '0 4px 12px rgba(102,126,234,0.15)',
+                            color: '#333',
+                            fontSize: 15,
+                            lineHeight: 1.5,
+                            whiteSpace: 'pre-wrap',
+                            alignSelf: 'flex-start',
+                            maxWidth: '90%'
+                        }}>
+                            {aiAnswer}
+                        </div>
+                    )}
 
+                    {/* Loading Indicator */}
+                    {aiLoading && (
+                        <div style={{
+                            background: 'rgba(255,255,255,0.95)',
+                            borderRadius: 16,
+                            padding: 16,
+                            boxShadow: '0 4px 12px rgba(102,126,234,0.15)',
+                            color: '#333',
+                            fontSize: 15,
+                            alignSelf: 'flex-start',
+                            maxWidth: '90%',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 8
+                        }}>
+                            <div style={{
+                                width: 8,
+                                height: 8,
+                                background: '#667eea',
+                                borderRadius: '50%',
+                                animation: 'pulse 1.5s infinite'
+                            }}></div>
+                            Thinking...
+                        </div>
+                    )}
+                </div>
+
+                {/* Input Area */}
+                <div style={{
+                    padding: '20px 24px',
+                    background: 'rgba(255,255,255,0.1)',
+                    backdropFilter: 'blur(10px)',
+                    borderTop: '1px solid rgba(255,255,255,0.2)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 12
+                }}>
+                    <TextField
+                        label=""
+                        value={aiQuestion}
+                        onChange={e => setAiQuestion(e.target.value)}
+                        fullWidth
+                        multiline
+                        minRows={2}
+                        variant="outlined"
+                        sx={{
+                            '& .MuiOutlinedInput-root': {
+                                background: 'rgba(255,255,255,0.95)',
+                                borderRadius: 12,
+                                '& fieldset': { borderColor: 'rgba(255,255,255,0.3)' },
+                                '&:hover fieldset': { borderColor: 'rgba(255,255,255,0.5)' },
+                                '&.Mui-focused fieldset': { borderColor: '#fff' }
+                            },
+                            '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.8)' },
+                            '& .MuiInputBase-input': { color: '#333' }
+                        }}
+                    />
+                    <Button
+                        variant="contained"
+                        onClick={handleAskAI}
+                        disabled={aiLoading || !aiQuestion}
+                        sx={{
+                            borderRadius: 12,
+                            fontWeight: 600,
+                            background: 'rgba(255,255,255,0.9)',
+                            color: '#667eea',
+                            '&:hover': { background: '#fff' },
+                            '&:disabled': { background: 'rgba(255,255,255,0.5)', color: 'rgba(102,126,234,0.5)' }
+                        }}
+                    >
+                        {aiLoading ? 'Thinking...' : 'Ask'}
+                    </Button>
+                </div>
+
+                {/* Pulse Animation */}
+                <style>{`
+                    @keyframes pulse {
+                        0%, 100% { opacity: 1; }
+                        50% { opacity: 0.5; }
+                    }
+                `}</style>
+            </div>
+            {/* Smart Assistant Toggle Button */}
+            {!showAISidebar && (
+                <IconButton
+                    onClick={() => setShowAISidebar(v => !v)}
+                    style={{
+                        position: 'fixed',
+                        top: 20,
+                        right: 20,
+                        color: '#fff',
+                        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                        borderRadius: 20,
+                        padding: 12,
+                        boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
+                        transition: 'all 0.3s ease',
+                        zIndex: 5,
+                        animation: 'gentlePulse 2s infinite',
+                        '&:hover': { transform: 'scale(1.05)' }
+                    }}
+                    title="Show AI Assistant"
+                >
+                    <SmartToyIcon />
+                </IconButton>
+            )}
+
+            {/* Add pulse animation style */}
+            <style>{`
+                @keyframes gentlePulse {
+                    0%, 100% { box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
+                    50% { box-shadow: 0 4px 25px rgba(102,126,234,0.4); }
+                }
+            `}</style>
+
+            {askForUsername === true ?
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', zIndex: 1 }}>
+                    <div style={{ background: 'rgba(255,255,255,0.85)', borderRadius: 24, boxShadow: '0 8px 32px 0 rgba(31,38,135,0.18)', padding: 40, minWidth: 320, maxWidth: 400, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                        <h2 style={{ fontWeight: 700, color: '#333', marginBottom: 24 }}>Enter into Lobby</h2>
+                        <TextField id="outlined-basic" label="Username" value={username} onChange={e => setUsername(e.target.value)} variant="outlined" sx={{ mb: 2, width: '100%' }} />
+                        <Button variant="contained" onClick={connect} sx={{ borderRadius: 2, fontWeight: 600, fontSize: '1.1rem', width: '100%', background: 'linear-gradient(90deg, #667eea 0%, #764ba2 100%)' }}>Connect</Button>
+                        <div style={{ marginTop: 32, borderRadius: 16, overflow: 'hidden', boxShadow: '0 2px 8px rgba(102,126,234,0.12)' }}>
+                            <video ref={localVideoref} autoPlay muted style={{ width: 240, height: 160, borderRadius: 12, background: '#222' }}></video>
+                        </div>
+                    </div>
+                </div>
+                :
+                <div className={styles.meetVideoContainer} style={{ position: 'relative', zIndex: 1 }}>
+                    {showModal ? (
+                        <div style={{
+                            position: 'fixed',
+                            bottom: 100,
+                            left: 20,
+                            width: 350,
+                            height: 450,
+                            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                            borderRadius: 20,
+                            boxShadow: '0 8px 32px rgba(102,126,234,0.3)',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            overflow: 'hidden',
+                            zIndex: 5
+                        }}>
+                            {/* Chat Header */}
+                            <div style={{
+                                padding: '16px 20px',
+                                background: 'rgba(255,255,255,0.1)',
+                                backdropFilter: 'blur(10px)',
+                                borderBottom: '1px solid rgba(255,255,255,0.2)',
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center'
+                            }}>
+                                <h3 style={{ color: '#fff', fontWeight: 700, margin: 0, fontSize: 18 }}>Meeting Chat</h3>
+                                <Button variant="text" onClick={() => setModal(false)} sx={{ color: '#fff', minWidth: 40, padding: 0 }}>
+                                    ✕
+                                </Button>
+                            </div>
+
+                            {/* Messages Area */}
+                            <div style={{
+                                flex: 1,
+                                padding: '16px 20px',
+                                overflowY: 'auto',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: 12
+                            }}>
+                                {messages.length !== 0 ? messages.map((item, index) => (
+                                    <div key={index} style={{
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        alignItems: item.sender === username ? 'flex-end' : 'flex-start',
+                                        marginBottom: 8
+                                    }}>
+                                        <div style={{
+                                            background: item.sender === username ? '#667eea' : 'rgba(255,255,255,0.9)',
+                                            color: item.sender === username ? '#fff' : '#333',
+                                            padding: '10px 14px',
+                                            borderRadius: 18,
+                                            maxWidth: '80%',
+                                            wordWrap: 'break-word',
+                                            boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                                            fontSize: 14,
+                                            lineHeight: 1.4
+                                        }}>
+                                            <div style={{ fontWeight: 600, fontSize: 12, marginBottom: 4, opacity: 0.8 }}>
+                                                {item.sender}
+                                            </div>
+                                            {item.data}
+                                        </div>
+                                    </div>
+                                )) : (
+                                    <div style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        height: '100%',
+                                        color: 'rgba(255,255,255,0.7)',
+                                        fontSize: 16
+                                    }}>
+                                        No messages yet. Start the conversation!
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Input Area */}
+                            <div style={{
+                                padding: '16px 20px',
+                                background: 'rgba(255,255,255,0.1)',
+                                backdropFilter: 'blur(10px)',
+                                borderTop: '1px solid rgba(255,255,255,0.2)',
+                                display: 'flex',
+                                gap: 12,
+                                alignItems: 'center'
+                            }}>
+                                <TextField
+                                    value={message}
+                                    onChange={(e) => setMessage(e.target.value)}
+                                    placeholder="Type a message..."
+                                    variant="outlined"
+                                    fullWidth
+                                    sx={{
+                                        '& .MuiOutlinedInput-root': {
+                                            background: 'rgba(255,255,255,0.95)',
+                                            borderRadius: 25,
+                                            '& fieldset': { borderColor: 'rgba(255,255,255,0.3)' },
+                                            '&:hover fieldset': { borderColor: 'rgba(255,255,255,0.5)' },
+                                            '&.Mui-focused fieldset': { borderColor: '#fff' }
+                                        },
+                                        '& .MuiInputBase-input': {
+                                            color: '#333',
+                                            padding: '12px 16px'
+                                        }
+                                    }}
+                                    onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
+                                />
+                                <Button
+                                    variant='contained'
+                                    onClick={sendMessage}
+                                    disabled={!message.trim()}
+                                    sx={{
+                                        borderRadius: 25,
+                                        minWidth: 50,
+                                        height: 50,
+                                        background: 'rgba(255,255,255,0.9)',
+                                        color: '#667eea',
+                                        '&:hover': { background: '#fff' },
+                                        '&:disabled': { background: 'rgba(255,255,255,0.3)', color: 'rgba(102,126,234,0.3)' }
+                                    }}
+                                >
+                                    ➤
+                                </Button>
+                            </div>
+                        </div>
+                    ) : null}
+                    <div style={{
+                        position: 'fixed',
+                        bottom: 20,
+                        left: '50%',
+                        transform: 'translateX(-50%)',
+                        background: 'rgba(0,0,0,0.6)',
+                        backdropFilter: 'blur(10px)',
+                        borderRadius: 30,
+                        padding: '12px 20px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 16,
+                        boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
+                        zIndex: 4
+                    }}>
+                        <IconButton onClick={handleVideo} style={{
+                            color: video ? '#fff' : '#ff6b6b',
+                            background: video ? 'rgba(102,126,234,0.8)' : 'rgba(255,107,107,0.2)',
+                            borderRadius: 20,
+                            padding: 12,
+                            transition: 'all 0.2s ease',
+                            '&:hover': { transform: 'scale(1.1)' }
+                        }}>
+                            {video ? <VideocamIcon /> : <VideocamOffIcon />}
+                        </IconButton>
+
+                        <IconButton onClick={handleAudio} style={{
+                            color: audio ? '#fff' : '#ff6b6b',
+                            background: audio ? 'rgba(102,126,234,0.8)' : 'rgba(255,107,107,0.2)',
+                            borderRadius: 20,
+                            padding: 12,
+                            transition: 'all 0.2s ease'
+                        }}>
+                            {audio ? <MicIcon /> : <MicOffIcon />}
+                        </IconButton>
+
+                        {screenAvailable && (
+                            <IconButton onClick={handleScreen} style={{
+                                color: screen ? '#fff' : '#888',
+                                background: screen ? 'rgba(102,126,234,0.8)' : 'rgba(136,136,136,0.2)',
+                                borderRadius: 20,
+                                padding: 12,
+                                transition: 'all 0.2s ease'
+                            }}>
+                                {screen ? <ScreenShareIcon /> : <StopScreenShareIcon />}
+                            </IconButton>
+                        )}
+
+                        <div style={{ width: 2, height: 30, background: 'rgba(255,255,255,0.3)', borderRadius: 1 }}></div>
+
+                        <Badge badgeContent={newMessages} max={999} color='error'>
+                            <IconButton onClick={() => setModal(!showModal)} style={{
+                                color: '#fff',
+                                background: 'rgba(102,126,234,0.8)',
+                                borderRadius: 20,
+                                padding: 12,
+                                transition: 'all 0.2s ease'
+                            }}>
+                                <ChatIcon />
+                            </IconButton>
+                        </Badge>
+
+                        <IconButton onClick={handleEndCall} style={{
+                            color: '#fff',
+                            background: 'linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%)',
+                            borderRadius: 20,
+                            padding: 12,
+                            transition: 'all 0.2s ease',
+                            '&:hover': { transform: 'scale(1.1)' }
+                        }}>
+                            <CallEndIcon />
+                        </IconButton>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 20 }}>
+                        <video className={styles.meetUserVideo} ref={localVideoref} autoPlay muted style={{
+                            width: 360,
+                            height: 240,
+                            borderRadius: 20,
+                            background: '#222',
+                            boxShadow: '0 8px 32px rgba(102,126,234,0.3)',
+                            border: '2px solid rgba(255,255,255,0.1)',
+                            transition: 'all 0.3s ease',
+                            '&:hover': { transform: 'scale(1.02)' }
+                        }}></video>
+                        <div className={styles.conferenceView} style={{
+                            display: 'flex',
+                            flexWrap: 'wrap',
+                            gap: 20,
+                            justifyContent: 'center',
+                            marginTop: 12
+                        }}>
+                            {videos.map((video) => (
+                                <div key={video.socketId} style={{
+                                    borderRadius: 20,
+                                    overflow: 'hidden',
+                                    boxShadow: '0 8px 32px rgba(102,126,234,0.2)',
+                                    background: '#fff',
+                                    border: '2px solid rgba(255,255,255,0.1)',
+                                    transition: 'all 0.3s ease',
+                                    '&:hover': { transform: 'scale(1.02)' }
+                                }}>
+                                    <video
+                                        data-socket={video.socketId}
+                                        ref={ref => {
+                                            if (ref && video.stream) {
+                                                ref.srcObject = video.stream;
+                                            }
+                                        }}
+                                        autoPlay
+                                        style={{
+                                            width: 240,
+                                            height: 160,
+                                            borderRadius: 18,
+                                            background: '#222'
+                                        }}
+                                    >
+                                    </video>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            }
         </div>
     )
 }
