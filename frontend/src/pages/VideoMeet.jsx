@@ -97,7 +97,7 @@ export default function VideoMeetComponent() {
         setAiLoading(true);
         setAiAnswer("");
         try {
-            const res = await fetch("http://localhost:8000/api/ai/ask", {
+            const res = await fetch("https://videox-2.onrender.com/api/ai/ask", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ transcript, question: aiQuestion })
