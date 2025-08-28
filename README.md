@@ -12,7 +12,6 @@ A modern, full-stack video meeting and collaboration platform inspired by Zoom, 
 - **Live Chat**: In-meeting chat with message history
 - **Meeting History**: View past meetings and summaries
 - **Responsive UI**: Modern, glassmorphic design, fully responsive for desktop and mobile
-- **Custom Video Backgrounds**: Video backgrounds with gradient overlays
 - **Meeting Code System**: Join meetings via unique codes
 - **User Meeting History**: Track and revisit previous meetings
 
