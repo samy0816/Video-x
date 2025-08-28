@@ -19,7 +19,7 @@ const io = connectToSocket(server);
 app.set("port", (process.env.PORT || 8000))
 app.use(cors({
     origin: process.env.NODE_ENV === 'production'
-        ? ["https://your-frontend-domain.com", "https://www.your-frontend-domain.com"]
+        ? ["https://videoxplatform.netlify.app", "https://videoxplatform.netlify.app"]
         : ["http://localhost:3000", "http://localhost:3001"],
     credentials: true
 }));
